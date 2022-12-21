@@ -12,21 +12,12 @@ class Reporting(object):
                 es: Any=None,
                 start_time: str=None,
                 end_time : str=None):
-        """Creating Reporting tool.
-
-        Args:
-            job (str): name of job. (ex.anomaly_detection, prediction ...)
-            start_time (str): start time 
-            end_time (str, optional): end time. if None, same to start time. Defaults to None.
-        """
-        # job info
         self.job = job
         if start_time:
             self.start_time = start_time
         else:
             self.start_time = self.retrieve_current_time()
         self.end_time = end_time
-        # init elastic engine
         if es:
             self.es = es
         else:
@@ -37,9 +28,35 @@ class Reporting(object):
         return f'Job Name : {self.job},\nStart time : {self.start_time},\nEnd:time : {self.end_time}'
 
     def set_start_time(self):
-        """Set start time to current UTC time."""
         self.start_time = datetime.datetime.now(datetime.timezone.utc)
     
     def set_end_time(self):
-        """Set end time to current UTC time."""
         self.end_time = datetime.datetime.now(datetime.timezone.utc)
+
+    def retrieve_current_time(self):
+        return datetime.datetime.now(datetime.timezone.utc)
+
+    def report_result(self, 
+                    result : str,
+                    error: str=None):
+        self.end_time = self.retrieve_current_time()  
+        data = {
+            "job": self.job,
+            "start_time": self.start_time ,
+            "end_time": self.end_time ,
+            "result": result
+            }
+        if (not error) and (result =='success'):
+            data['error'] = '없습니다.'
+        elif error and result == 'fail':
+            if error == 'read':
+                data['error'] = '데이터를 불러오는 데 실패하였습니다.'
+            elif error =='write': 
+                data['error'] = '데이터를 저장하는 데 실패하였습니다.' 
+            elif error == 'exist':
+                data['error'] = '데이터가 존재하지 않습니다.'
+            elif error == 'connect':
+                data['error'] = 'DB 연결에 실패하였습니다.'
+            else:
+                data['error'] = error
+        self.es.write_data(data=data, index=self.es_index)
