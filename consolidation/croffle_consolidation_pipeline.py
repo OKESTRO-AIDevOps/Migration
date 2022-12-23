@@ -1,24 +1,19 @@
-
-# 221205_v1 consolidation
 import kfp
 from kfp import dsl
 from kfp import components
 from kfp.components import func_to_container_op
 from elasticsearch import Elasticsearch
 import kubernetes.client
-# client = kfp.Client(host='ip_address')
 client = kfp.Client(host='ip_address')
 
 def croffle_consolidation() -> None:
     import sys
-    # sys.path.append('/symphony/croffle/')
     sys.path.append('/croffle/')
     from utils.result import Reporting
     reporting = Reporting(job='croffle-consolidation')
 
     try:
         import os
-        # os.system('echo -e "\nip_address path.your.api" >> /etc/hosts ')
         os.system('echo -e "\nip_address path.your.api" >> /etc/hosts ') 
         print(sys.path)
         from jobs.consolidation import Consolidation
@@ -26,7 +21,6 @@ def croffle_consolidation() -> None:
         from utils.metaParsing import MetaParsing
         config_path = '/path/youre/config.ini'
 
-    # #### <<< croffle consolidation >>> ####
         metaData = metaData()
     except:
         reporting.report_result(result='fail', error='connect')
@@ -66,3 +60,28 @@ def croffle_consolidation() -> None:
         reporting.report_result(result='fail', error='consolidation Algorithm fail')
         print(e)
         exit()
+
+    reporting.report_result(result='success')
+    print('SUCCESS')
+
+croffle_consolidation_component = components.create_component_from_func(
+        func=croffle_consolidation,
+        base_image='path/your/image',
+        packages_to_install=['requests']
+    )
+
+@dsl.pipeline(
+    name="croffle-consolidation",
+)
+
+def croffle_consolidation_pipeline():
+    dsl.get_pipeline_conf().set_image_pull_secrets([kubernetes.client.V1LocalObjectReference(name="public_aiops")])
+    croffle_consolidation_component()
+
+
+client.create_run_from_pipeline_func(croffle_consolidation_pipeline, arguments={})
+
+kfp.compiler.Compiler().compile(
+    pipeline_func=croffle_consolidation_pipeline,
+    package_path='croffle_consolidation_pipeline.yaml'
+)
