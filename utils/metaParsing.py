@@ -1,19 +1,12 @@
 import os
 import sys
-
-from utils.consolidation.serverObject import Provider
-from utils.consolidation.serverObject import Region
-from utils.consolidation.serverObject import Zone
-from utils.consolidation.serverObject import Host
-from utils.consolidation.serverObject import Vm
-
+from utils.consolidation.serverObject import Provider, Region, Zone, Host, Vm
 from utils.logs.log import standardLog
 from utils.metaData import metaData
 
+# Initialize standardLog and metaData objects after imports
 standardLog = standardLog()
-
 metaData = metaData()
-
 
 class MetaParsing:
     def __init__(self, provider_id, provider_type, cpu_overcommit=7, memory_overcommit=3, disk_overcommit=1):
@@ -23,7 +16,6 @@ class MetaParsing:
         self.memory_overcommit = memory_overcommit
         self.disk_overcommit = disk_overcommit
         self.metas_v1 = metaData.retrieve_meta_openstack_info(provider_id=provider_id, info='metas')
-
         self.hypervisor_v2 = metaData.retrieve_meta_openstack_info_v2(provider_id=provider_id, info='hypervisors')
         self.metas_v2 = metaData.retrieve_meta_openstack_info_v2(provider_id=provider_id, info='vms')
 
