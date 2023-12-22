@@ -1,50 +1,45 @@
 import kfp
 from kfp import dsl
-from kfp import components
 from kfp.components import func_to_container_op
-from elasticsearch import Elasticsearch
 import kubernetes.client
+
 client = kfp.Client(host='ip_address')
 
+
+@func_to_container_op
 def croffle_consolidation() -> None:
     import sys
+    import os
+    from utils.result import Reporting
+    from jobs.consolidation import Consolidation
+    from utils.metaData import metaData
+    from utils.metaParsing import MetaParsing
 
     sys.path.append('path/your/file')
     sys.path.append('path/your/file')
-
-    import os 
 
     print(os.listdir())
-    from utils.result import Reporting
+
     reporting = Reporting(job='croffle-consolidation')
+
     try:
-        import os
         os.system('echo -e "\nip_address path.your.api" >> /etc/hosts')
 
-        from jobs.consolidation import Consolidation
-        from utils.metaData import metaData
-        from utils.metaParsing import MetaParsing
-        config_path = 'path/your/config.ini'
-
-        metaData = metaData()
-    except:
-        reporting.report_result(result='fail', error='connect')
+        metaData_instance = metaData()
+    except Exception as e:
+        reporting.report_result(result='fail', error=f'connect: {str(e)}')
         exit(1)
 
     try:
-        providers = metaData.retrieve_meta_providers()
-        openstack_providers = list()
-
-        for provider in providers:
-            if provider['type'] == 'openstack':
-                openstack_providers.append(provider['id'])
-    except:
-        reporting.report_result(result='fail', error='read')
+        providers = metaData_instance.retrieve_meta_providers()
+        openstack_providers = [provider['id'] for provider in providers if provider['type'] == 'openstack']
+    except Exception as e:
+        reporting.report_result(result='fail', error=f'read: {str(e)}')
         exit(1)
 
     try:
-        for id in openstack_providers:
-            metaParsing = MetaParsing(id, 'openstack')
+        for provider_id in openstack_providers:
+            metaParsing = MetaParsing(provider_id, 'openstack')
             if metaParsing.metas is not None:
                 provider = metaParsing.hierarchy_vms()
 
@@ -53,21 +48,20 @@ def croffle_consolidation() -> None:
 
                 try:
                     consolidation.conslidation_to_es(placement, migration_placement, total_cost)
-                except:
-                    reporting.report_result(result='fail', error='write')
+                except Exception as e:
+                    reporting.report_result(result='fail', error=f'write: {str(e)}')
                     exit(1)
             print('finish')
         print('real finish')
-    except:
-        reporting.report_result(result='fail', error='consolidation Algorithm fail')
-        exit()
+    except Exception as e:
+        reporting.report_result(result='fail', error=f'consolidation Algorithm fail: {str(e)}')
+        exit(1)
+
     reporting.report_result(result='success')
 
-croffle_consolidation_component = components.create_component_from_func(
-        func=croffle_consolidation,                       
-        base_image='path/your/image',
-        packages_to_install=['requests']    
-    )
+
+croffle_consolidation_op = croffle_consolidation()
+
 
 @dsl.pipeline(
     name="croffle-consolidation",
@@ -75,8 +69,11 @@ croffle_consolidation_component = components.create_component_from_func(
 def croffle_consolidation_pipeline():
     vop = dsl.PipelineVolume(pvc='croffle-pvc')
     dsl.get_pipeline_conf().set_image_pull_secrets([kubernetes.client.V1LocalObjectReference(name="public_aiops")])
-    croffle_consolidation_component().add_pvolumes({"/aiplatform/": vop})
+
+    croffle_consolidation_op("/aiplatform/").add_pvolumes({"/aiplatform/": vop})
+
     dsl.get_pipeline_conf().set_ttl_seconds_after_finished(20)
+
 
 client.create_run_from_pipeline_func(croffle_consolidation_pipeline, arguments={})
 
@@ -86,9 +83,9 @@ kfp.compiler.Compiler().compile(
 )
 
 client.create_recurring_run(
-    experiment_id = client.get_experiment(experiment_name="Default").id,
+    experiment_id=client.get_experiment(experiment_name="Default").id,
     job_name="croffle_consolidation",
     description="version: croffle:consolidation_v1",
     cron_expression="0 10 16 * *",
-    pipeline_package_path = "path/your/croffle_consolidation_pipeline.yaml"
+    pipeline_package_path="path/your/croffle_consolidation_pipeline.yaml"
 )
